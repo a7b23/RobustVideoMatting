@@ -77,3 +77,49 @@ class MattingNetwork(nn.Module):
             x = F.interpolate(x, scale_factor=scale_factor,
                 mode='bilinear', align_corners=False, recompute_scale_factor=False)
         return x
+
+
+class MakeupNetwork(nn.Module):
+    def __init__(self,
+                 variant: str = 'mobilenetv3',
+                 refiner: str = 'deep_guided_filter',
+                 pretrained_backbone: bool = False):
+        super().__init__()
+        assert variant in ['mobilenetv3', 'resnet50']
+        assert refiner in ['fast_guided_filter', 'deep_guided_filter']
+        
+        if variant == 'mobilenetv3':
+            self.backbone = MobileNetV3LargeEncoder(pretrained_backbone)
+            self.aspp = LRASPP(960, 128)
+            self.decoder = RecurrentDecoder([16, 24, 40, 128], [80, 40, 32, 16])
+        else:
+            self.backbone = ResNet50Encoder(pretrained_backbone)
+            self.aspp = LRASPP(2048, 256)
+            self.decoder = RecurrentDecoder([64, 256, 512, 256], [128, 64, 32, 16])
+            
+        self.project_mat = Projection(16, 3)
+        self.project_seg = Projection(16, 1)
+        
+    def forward(self,
+                src: Tensor,
+                r1: Optional[Tensor] = None,
+                r2: Optional[Tensor] = None,
+                r3: Optional[Tensor] = None,
+                r4: Optional[Tensor] = None,
+                downsample_ratio: float = 1,
+                segmentation_pass: bool = False):
+                
+        src_sm = src
+        f1, f2, f3, f4 = self.backbone(src_sm)
+        f4 = self.aspp(f4)
+        hid, *rec = self.decoder(src_sm, f1, f2, f3, f4, r1, r2, r3, r4)
+        
+        if not segmentation_pass:
+            out_residual = self.project_mat(hid)
+
+            out = out_residual + src
+            out = out.clamp(0., 1.)
+            return [out, *rec]
+        else:
+            seg = self.project_seg(hid)
+            return [seg, *rec]

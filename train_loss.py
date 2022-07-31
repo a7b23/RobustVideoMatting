@@ -30,6 +30,14 @@ def matting_loss(pred_fgr, pred_pha, true_fgr, true_pha):
                   + loss['fgr_l1'] + loss['fgr_coherence']
     return loss
 
+def makeup_loss(pred_img, true_img):
+    loss = dict()
+    loss['l1'] = F.l1_loss(pred_img, true_img)
+    loss['coherence'] = F.mse_loss(pred_img[:, 1:] - pred_img[:, :-1],
+                                       true_img[:, 1:] - true_img[:, :-1]) * 5
+    loss['total'] = loss['l1'] + loss['coherence']
+    return loss
+
 def segmentation_loss(pred_seg, true_seg):
     """
     Args:
