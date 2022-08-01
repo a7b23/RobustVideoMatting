@@ -96,11 +96,16 @@ from tqdm import tqdm
 
 
 from dataset.videomakeup import (
-    VideoMakeupDataset
+    VideoMakeupDataset,
+    VideoMakeupTrainAugmentation,
+    VideoMakeupValidAugmentation
 )
 from dataset.augmentation import (
     TrainFrameSampler,
     ValidFrameSampler
+)
+from dataset.youtubevis import (
+    YouTubeVISAugmentation
 )
 from model import MattingNetwork
 from train_config import DATA_PATHS
@@ -176,13 +181,13 @@ class Trainer:
                 size=self.args.resolution_lr,
                 seq_length=self.args.seq_length_lr,
                 seq_sampler=TrainFrameSampler(),
-                transform=None)
+                transform=VideoMakeupTrainAugmentation(size_lr))
             self.dataset_valid = VideoMakeupDataset(
                 videomakeup_dir=DATA_PATHS['videomakeup']['valid'],
                 size=self.args.resolution_lr,
                 seq_length=self.args.seq_length_lr,
                 seq_sampler=ValidFrameSampler(),
-                transform=None)
+                transform=VideoMakeupValidAugmentation(size_lr))
         # Matting dataloaders:
         self.datasampler_lr_train = DistributedSampler(
             dataset=self.dataset_lr_train,
@@ -210,7 +215,7 @@ class Trainer:
                 seq_length=self.args.seq_length_lr,
                 seq_sampler=TrainFrameSampler(),
                 is_segmentation=True,
-                transform=None)
+                transform=YouTubeVISAugmentation(size_lr))
         self.datasampler_seg_video = DistributedSampler(
             dataset=self.dataset_seg_video,
             rank=self.rank,

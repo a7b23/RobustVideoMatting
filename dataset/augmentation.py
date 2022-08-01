@@ -184,6 +184,83 @@ class MotionAugmentation:
         return imgs if len(imgs) > 1 else imgs[0]
     
 
+class MakeupMotionAugmentation(MotionAugmentation):
+    def __init__(self,
+                 size,
+                 prob_fgr_affine,
+                 prob_bgr_affine,
+                 prob_noise,
+                 prob_color_jitter,
+                 prob_grayscale,
+                 prob_sharpness,
+                 prob_blur,
+                 prob_hflip,
+                 prob_pause,
+                 static_affine=True,
+                 aspect_ratio_range=(0.9, 1.1)):
+        super().__init__(
+            size,
+            prob_fgr_affine,
+            prob_bgr_affine,
+            prob_noise,
+            prob_color_jitter,
+            prob_grayscale,
+            prob_sharpness,
+            prob_blur,
+            prob_hflip,
+            prob_pause,
+        )
+    def __call__(self, no_mkps, true_mkps):
+        # Foreground affine
+        if random.random() < self.prob_fgr_affine:
+            no_mkps, true_mkps = self._motion_affine(no_mkps, true_mkps)
+
+        # Still Affine
+        if self.static_affine:
+            no_mkps, true_mkps = self._static_affine(no_mkps, true_mkps, scale_ranges=(0.5, 1))
+        
+        # To tensor
+        no_mkps = torch.stack([F.to_tensor(no_mkp) for no_mkp in no_mkps])
+        true_mkps = torch.stack([F.to_tensor(true_mkp) for true_mkp in true_mkps])
+        
+        # Resize
+        params = transforms.RandomResizedCrop.get_params(no_mkps, scale=(1, 1), ratio=self.aspect_ratio_range)
+        no_mkps = F.resized_crop(no_mkps, *params, self.size, interpolation=F.InterpolationMode.BILINEAR)
+        true_mkps = F.resized_crop(true_mkps, *params, self.size, interpolation=F.InterpolationMode.BILINEAR)
+
+        # Horizontal flip
+        if random.random() < self.prob_hflip:
+            no_mkps = F.hflip(no_mkps)
+            true_mkps = F.hflip(true_mkps)
+
+        # Noise
+        if random.random() < self.prob_noise:
+            no_mkps, true_mkps = self._motion_noise(no_mkps, true_mkps)
+        
+        # Color jitter
+        if random.random() < self.prob_color_jitter:
+            no_mkps = self._motion_color_jitter(no_mkps)
+            
+        # Grayscale
+        if random.random() < self.prob_grayscale:
+            no_mkps = F.rgb_to_grayscale(no_mkps, num_output_channels=3).contiguous()
+            
+        # Sharpen
+        if random.random() < self.prob_sharpness:
+            sharpness = random.random() * 8
+            no_mkps = F.adjust_sharpness(no_mkps, sharpness)
+            true_mkps = F.adjust_sharpness(true_mkps, sharpness)
+        
+        # Blur
+        if random.random() < self.prob_blur / 3:
+            no_mkps, true_mkps = self._motion_blur(no_mkps, true_mkps)
+
+        # Pause
+        if random.random() < self.prob_pause:
+            no_mkps, true_mkps = self._motion_pause(no_mkps, true_mkps)
+        
+        return no_mkps, true_mkps
+
 def lerp(a, b, percentage):
     return a * (1 - percentage) + b * percentage
 

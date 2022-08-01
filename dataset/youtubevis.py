@@ -105,8 +105,8 @@ class YouTubeVISAugmentation:
         
         # Resize
         params = transforms.RandomResizedCrop.get_params(imgs, scale=(0.8, 1), ratio=(0.9, 1.1))
-        imgs = F.resized_crop(imgs, *params, self.size, interpolation=F.InterpolationMode.BILINEAR)
-        segs = F.resized_crop(segs, *params, self.size, interpolation=F.InterpolationMode.BILINEAR)
+        imgs = F.resized_crop(imgs, *params, (self.size, self.size), interpolation=F.InterpolationMode.BILINEAR)
+        segs = F.resized_crop(segs, *params, (self.size, self.size), interpolation=F.InterpolationMode.BILINEAR)
         
         # Color jitter
         imgs = self.jitter(imgs)

@@ -3,7 +3,7 @@ import random
 from torch.utils.data import Dataset
 from PIL import Image
 
-# from .augmentation import MotionAugmentation
+from .augmentation import MakeupMotionAugmentation
 
 
 class VideoMakeupDataset(Dataset):
@@ -16,7 +16,7 @@ class VideoMakeupDataset(Dataset):
                  transform=None):
         
         self.videomakeup_dir = videomakeup_dir
-        self.videomakeup_clips = sorted(os.listdir(videomakeup_dir))
+        self.videomakeup_clips = [clip for clip in sorted(os.listdir(videomakeup_dir)) if not clip.startswith(".")]
         self.videomakeup_frames = [sorted(os.listdir(os.path.join(videomakeup_dir, clip))) 
                                   for clip in self.videomakeup_clips]
         self.videomakeup_idx = [(clip_idx, frame_idx) 
@@ -35,13 +35,17 @@ class VideoMakeupDataset(Dataset):
 
         no_mkps, true_mkps, segs = self._get_videomakeup(idx)
         
-        # if self.transform is not None:
-        #     return self.transform(fgrs, phas, bgrs)
         if not self.is_segmentation:
-            return no_mkps, true_mkps
+            if self.transform is not None:
+                return self.transform(no_mkps, true_mkps)
+            else:
+                return no_mkps, true_mkps
         else:
-            return no_mkps, segs
-    
+            if self.transform is not None:
+                return self.transform(no_mkps, segs)
+            else:
+                return no_mkps, segs
+                    
     def _get_videomakeup(self, idx):
         clip_idx, frame_idx = self.videomakeup_idx[idx]
         clip = self.videomakeup_clips[clip_idx]
@@ -56,7 +60,7 @@ class VideoMakeupDataset(Dataset):
                 w2 = int(w / imgs_total)
                 A = img.crop((w2, 0, 2*w2, h)) #nomk
                 B = img.crop((2*w2, 0, 3*w2, h)) #gt
-                D = img.crop((3*w2, 0, w, h)) #lip mask of nomk
+                D = img.crop((3*w2, 0, w, h)).convert('L') #lip mask of nomk
             no_mkps.append(A)
             true_mkps.append(B)
             segs.append(D)
@@ -70,3 +74,33 @@ class VideoMakeupDataset(Dataset):
             h = int(scale * h)
             img = img.resize((w, h))
         return img
+
+class VideoMakeupTrainAugmentation(MakeupMotionAugmentation):
+    def __init__(self, size):
+        super().__init__(
+            size=size,
+            prob_fgr_affine=0.3,
+            prob_bgr_affine=0.3,
+            prob_noise=0.1,
+            prob_color_jitter=0.3,
+            prob_grayscale=0.02,
+            prob_sharpness=0.1,
+            prob_blur=0.02,
+            prob_hflip=0.5,
+            prob_pause=0.03,
+        )
+
+class VideoMakeupValidAugmentation(MakeupMotionAugmentation):
+    def __init__(self, size):
+        super().__init__(
+            size=size,
+            prob_fgr_affine=0,
+            prob_bgr_affine=0,
+            prob_noise=0,
+            prob_color_jitter=0,
+            prob_grayscale=0,
+            prob_sharpness=0,
+            prob_blur=0,
+            prob_hflip=0,
+            prob_pause=0,
+        )
